@@ -1,9 +1,10 @@
 #include <Arduino.h>
 #include <IRrecv.h>
 #include <IRutils.h>
-#include <Adafruit_NeoPixel.h>  // 添加 NeoPixel 库
+#include <Adafruit_NeoPixel.h>
 
 #define IR_RECEIVE_PIN 10
+#define BUTTON_PIN 40  
 #define LED_PIN 48  
 #define NUM_LEDS 1  
 
@@ -13,35 +14,60 @@ decode_results results;
 // 创建 NeoPixel 对象
 Adafruit_NeoPixel pixels(NUM_LEDS, LED_PIN, NEO_GRB + NEO_KHZ800);
 
+// 函数：生成随机颜色
+uint32_t getRandomColor() {
+  uint8_t r = random(256);
+  uint8_t g = random(256);
+  uint8_t b = random(256);
+  return pixels.Color(r, g, b);
+}
+
 // 函数：根据信号值生成固定颜色
 uint32_t getColorForSignal(uint64_t signalValue) {
   // 使用信号值作为随机种子
   randomSeed(signalValue);
-  
-  // 生成RGB颜色分量
-  uint8_t r = random(256);
-  uint8_t g = random(256);
-  uint8_t b = random(256);
-  
-  return pixels.Color(r, g, b);
+  return getRandomColor();
 }
 
 void setup() {
   Serial.begin(115200);
   while (!Serial);  
   
+  // 初始化按钮引脚
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
+  
   // 初始化 NeoPixel
   pixels.begin();
   pixels.clear();  
   pixels.show();  
   
-  Serial.println("ESP32-S3 IR Receiver Demo");
+  Serial.println("ESP32-S3 IR Receiver with Button Demo");
   irrecv.enableIRIn();
   Serial.print("Ready to receive IR signals at pin GPIO");
   Serial.println(IR_RECEIVE_PIN);
+  Serial.println("Press button to generate random color");
 }
 
 void loop() {
+  // 检查按钮是否按下（低电平）
+  if (digitalRead(BUTTON_PIN) == LOW) {
+    delay(50); // 简单消抖
+    if (digitalRead(BUTTON_PIN) == LOW) { // 确认按下
+      Serial.println("Button pressed - generating random color");
+      
+      // 生成随机颜色
+      uint32_t color = getRandomColor();
+      pixels.setPixelColor(0, color);
+      pixels.show();
+      
+      // 等待按钮释放
+      while (digitalRead(BUTTON_PIN) == LOW) {
+        delay(10);
+      }
+    }
+  }
+  
+  // 处理红外信号
   if (irrecv.decode(&results)) {
     Serial.println("\nReceived IR Signal:");
     serialPrintUint64(results.value, HEX);
