@@ -23,6 +23,13 @@ pio lib install "Adafruit NeoPixel"
 * 可以换一个板子 esp32C6 看看省电的效果, 
 
 
+### 注意点
+
+* 将写到文件系统的中数据拿出来时候，一定不要开 monitor 数据会被它截取，而没法写到日志中去。
+
+
+
+
 
 
 
