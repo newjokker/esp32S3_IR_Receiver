@@ -1,26 +1,26 @@
 #include <Arduino.h>
-#include <IRrecv.h>
-#include <IRutils.h>
 #include <Adafruit_NeoPixel.h>
 #include <LittleFS.h>
 
-#define IR_RECEIVE_PIN 10
 #define BUTTON_PIN 40  
 #define LED_PIN 48  
 #define NUM_LEDS 1  
-
-IRrecv irrecv(IR_RECEIVE_PIN);
-decode_results results;
 
 // 创建 NeoPixel 对象
 Adafruit_NeoPixel pixels(NUM_LEDS, LED_PIN, NEO_GRB + NEO_KHZ800);
 
 // CSV文件名
-const char* csvFilename = "/ir_data.csv";
+const char* csvFilename = "/data.csv";
 
-// 函数：初始化文件系统
+// 函数声明
+void exportCSVToSerial();
+bool initFileSystem();
+uint32_t getRandomColor();
+void appendDataToCSV(uint32_t color);
+
+// 初始化文件系统
 bool initFileSystem() {
-  if (!LittleFS.begin(true)) {  // true表示如果文件系统不存在则格式化
+  if (!LittleFS.begin(true)) {
     Serial.println("无法挂载文件系统");
     return false;
   }
@@ -34,7 +34,7 @@ bool initFileSystem() {
       Serial.println("无法创建CSV文件");
       return false;
     }
-    if (!file.println("Timestamp,Protocol,Value,Bits,Color")) {
+    if (!file.println("Timestamp,Color")) {
       Serial.println("写入表头失败");
       file.close();
       return false;
@@ -45,7 +45,7 @@ bool initFileSystem() {
   return true;
 }
 
-// 函数：生成随机颜色
+// 生成随机颜色
 uint32_t getRandomColor() {
   uint8_t r = random(256);
   uint8_t g = random(256);
@@ -53,58 +53,51 @@ uint32_t getRandomColor() {
   return pixels.Color(r, g, b);
 }
 
-// 函数：根据信号值生成固定颜色
-uint32_t getColorForSignal(uint64_t signalValue) {
-  randomSeed(signalValue);
-  return getRandomColor();
-}
-
-// 函数：将数据追加到CSV文件
-void appendToCSV(const decode_results& results, uint32_t color) {
-  if (!LittleFS.exists(csvFilename)) {
-    Serial.println("CSV文件不存在");
-    return;
-  }
-
+// 添加数据到CSV
+void appendDataToCSV(uint32_t color) {
   File file = LittleFS.open(csvFilename, FILE_APPEND);
   if (!file) {
     Serial.println("无法打开CSV文件进行写入");
     return;
   }
 
-  // 获取当前时间戳
-  String timestamp = String(millis());
-
-  // 写入数据
-  file.print(timestamp);
+  // 写入时间戳和颜色值
+  file.print(millis());
   file.print(",");
-  
-  // 写入协议类型
-  switch(results.decode_type) {
-    case NEC: file.print("NEC"); break;
-    case SONY: file.print("SONY"); break;
-    case RC5: file.print("RC5"); break;
-    case RC6: file.print("RC6"); break;
-    default: file.print("UNKNOWN"); break;
-  }
-  file.print(",");
-  
-  // 写入信号值和位数
-  file.print("0x");
-  file.print(results.value, HEX);
-  file.print(",");
-  file.print(results.bits, DEC);
-  file.print(",");
-  
-  // 写入颜色值
-  file.print(color, HEX);
-  
-  if (!file.println()) {
-    Serial.println("写入数据失败");
-  }
+  file.println(color, HEX);
   
   file.close();
   Serial.println("数据已保存到CSV文件");
+}
+
+void exportCSVToSerial() {
+  if (!LittleFS.exists(csvFilename)) {
+    Serial.println("ERROR:CSV_NOT_FOUND");
+    return;
+  }
+  
+  File file = LittleFS.open(csvFilename, FILE_READ);
+  if (!file) {
+    Serial.println("ERROR:FILE_OPEN_FAILED");
+    return;
+  }
+
+  // 添加起始标记
+  Serial.println("CSV_START");
+  Serial.flush();
+  while (file.available()) {
+    String line = file.readStringUntil('\n');
+    if (line.length() > 0) {
+      Serial.println(line); // 确保每行以换行结束
+      Serial.flush();
+    }
+  }
+  
+  // 添加结束标记
+  Serial.println("CSV_END");
+  Serial.flush();
+  
+  file.close();
 }
 
 void setup() {
@@ -124,24 +117,24 @@ void setup() {
   pixels.clear();  
   pixels.show();  
   
-  Serial.println("ESP32-S3 IR Receiver with Data Logging");
-  irrecv.enableIRIn();
-  Serial.print("Ready to receive IR signals at pin GPIO");
-  Serial.println(IR_RECEIVE_PIN);
-  Serial.println("Press button to generate random color");
+  Serial.println("ESP32-S3 数据记录器");
+  Serial.println("按下按钮记录数据");
 }
 
 void loop() {
   // 检查按钮是否按下（低电平）
   if (digitalRead(BUTTON_PIN) == LOW) {
-    delay(50); // 简单消抖
+    delay(50); // 消抖
     if (digitalRead(BUTTON_PIN) == LOW) { // 确认按下
-      Serial.println("Button pressed - generating random color");
+      Serial.println("按钮按下 - 记录数据");
       
       // 生成随机颜色
       uint32_t color = getRandomColor();
       pixels.setPixelColor(0, color);
       pixels.show();
+      
+      // 记录数据到CSV
+      appendDataToCSV(color);
       
       // 等待按钮释放
       while (digitalRead(BUTTON_PIN) == LOW) {
@@ -150,57 +143,22 @@ void loop() {
     }
   }
   
-  // 处理红外信号
-  if (irrecv.decode(&results)) {
-    Serial.println("\nReceived IR Signal:");
-    serialPrintUint64(results.value, HEX);
-    Serial.print(" (");
-    Serial.print(results.bits, DEC);
-    Serial.println(" bits)");
+  // 处理串口命令
+  if (Serial.available() > 0) {
+    String command = Serial.readStringUntil('\n');
+    command.trim();
     
-    Serial.print("Protocol: ");
-    switch(results.decode_type) {
-      case NEC: Serial.println("NEC"); break;
-      case SONY: Serial.println("SONY"); break;
-      case RC5: Serial.println("RC5"); break;
-      case RC6: Serial.println("RC6"); break;
-      case UNKNOWN: 
-      default: 
-        Serial.println("UNKNOWN"); 
-        Serial.println("Raw data:");
-        Serial.println(resultToHumanReadableBasic(&results));
-        break;
+    if (command == "export") {
+      exportCSVToSerial();
     }
-    
-    // 为当前信号获取颜色并设置LED
-    uint32_t color = getColorForSignal(results.value);
-    pixels.setPixelColor(0, color);
-    pixels.show();
-    
-    // 将数据保存到CSV文件
-    appendToCSV(results, color);
-    
-    irrecv.resume();
+    else if (command == "clear") {
+      if (LittleFS.remove(csvFilename)) {
+        Serial.println("CSV文件已删除");
+        initFileSystem(); // 重新创建文件
+      }
+    }
   }
+  
   delay(100);
 }
 
-// 导出CSV文件内容到串口
-void exportCSVToSerial() {
-  if (!LittleFS.exists(csvFilename)) {
-    Serial.println("CSV文件不存在");
-    return;
-  }
-  
-  File file = LittleFS.open(csvFilename, FILE_READ);
-  if (!file) {
-    Serial.println("无法打开CSV文件进行读取");
-    return;
-  }
-  
-  Serial.println("\nCSV文件内容:");
-  while (file.available()) {
-    Serial.write(file.read());
-  }
-  file.close();
-}
