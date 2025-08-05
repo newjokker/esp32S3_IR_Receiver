@@ -13,6 +13,9 @@ void setup() {
   delay(500);
   Serial.println("ESP32-LOGGER_READY");
 
+  // 初始化红外接器
+  initIRReceiver(irrecv);
+
   // 初始化 wifi 和 北京时间
   initWiFiAndTime();
 
@@ -33,8 +36,11 @@ void loop() {
       uint32_t color = getRandomColor();
       pixels.setPixelColor(0, color);
       pixels.show();
-      appendDataToCSV(color);
+      appendDataToCSV(color, "button");
   }
+
+  // 处理接收到的红外信号
+  handleIRSignal(irrecv, pixels);
 
   // 串口命令处理
   if (Serial.available()) {
