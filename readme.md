@@ -16,6 +16,24 @@ pio lib install "Adafruit NeoPixel"
 
 ```
 
+### 调试代码
+
+* 串口调试
+```bash
+
+tio -b 115200 --timestamp  /dev/cu.wchusbserial5A7B1617701 
+
+```
+
+* python 代码调试
+
+```bash
+
+python3 read_csv.py /dev/cu.wchusbserial5A7B1617701 
+
+```
+
+
 ### 需求
 
 * 可以快速去采集数据，但是采集的数据都保存在本地的文件系统中或者哪个存储中（断电可恢复），数据一小时或者指定周期上传一次

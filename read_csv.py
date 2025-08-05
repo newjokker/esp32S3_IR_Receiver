@@ -122,7 +122,7 @@ def print_menu():
     print("2.  导出并保存到文件")
     print("3.  清除并验证是否清除")
     print("99. 退出")
-    return input("请选择操作 (1-5): ").strip()
+    return input("请选择操作 (1-3): ").strip()
 
 def main():
     

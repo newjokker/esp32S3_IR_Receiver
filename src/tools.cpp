@@ -19,7 +19,7 @@ bool initFileSystem() {
       Serial.println("ERROR:CSV_CREATE_FAIL");
       return false;
     }
-    file.println("Timestamp(ISO8601),Uptime(ms),Color(HEX),ButtonStatus");
+    file.println("Timestamp(ISO8601),Uptime(ms),Color(HEX),Who");
     file.close();
   }
   Serial.println("OK:FILESYSTEM_READY");
