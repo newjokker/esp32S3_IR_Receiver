@@ -46,7 +46,7 @@ class ESP32Logger:
             if self.ser.in_waiting:
                 line = self.ser.readline().decode('utf-8', errors='ignore').strip()
                 if line:
-                    print(f"[ESP32] {line}")
+                    # print(f"[ESP32] {line}")
                     if expected_response and expected_response in line:
                         return True
                     # 如果不需要特定响应，只要收到任何响应就返回成功
