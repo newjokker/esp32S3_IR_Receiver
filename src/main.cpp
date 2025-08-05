@@ -109,7 +109,7 @@ void initWiFiAndTime() {
   }
   if (WiFi.status() == WL_CONNECTED) {
     Serial.println("\nWiFi connected.");
-    configTime(0, 0, "pool.ntp.org", "time.nist.gov");
+    configTime(8 * 3600, 0, "pool.ntp.org", "time.nist.gov"); // 8*3600表示UTC+8（北京时间）
     struct tm timeinfo;
     if (getLocalTime(&timeinfo)) {
       Serial.println("Time synced: " + getISOTimestamp());
