@@ -32,7 +32,7 @@ class ESP32Logger:
         if self.ser and self.ser.is_open:
             self.ser.close()
 
-    def send_command(self, command: str, expected_response: str = None, timeout: float = 3.0) -> bool:
+    def send_command(self, command: str, expected_response: str = None, timeout: float = 3.0):
         """发送命令并检查预期响应"""
         if not self.ser or not self.ser.is_open:
             print("[ERROR] 串口未连接")
@@ -61,14 +61,15 @@ class ESP32Logger:
         """等待设备就绪"""
         return self.send_command("ping", "OK:PONG", timeout)
 
-    def export_csv(self, timeout: float = 10.0) -> Optional[List[str]]:
+    def export_csv(self, timeout: float = 10.0):
         """导出CSV数据"""
+        
+        # 这边一直到收到 CSV_START 为止
         if not self.send_command("export", "CSV_START", timeout):
             return None
 
         csv_data = []
         start_time = time.time()
-        collecting = False
         buffer = ""
 
         while time.time() - start_time < timeout:
@@ -83,17 +84,11 @@ class ESP32Logger:
                 if not line:
                     continue
 
-                print(f"[DEBUG] 原始行: {line}")  # 调试输出
-
-                if line == "CSV_START":
-                    collecting = True
-                    print("[DEBUG] 开始收集数据")
-                elif line == "CSV_END":
-                    print("[DEBUG] 结束收集数据")
-                    return csv_data
-                elif collecting:
+                if "CSV_END" not in line:
                     csv_data.append(line)
                     print(f"[DEBUG] 收集到数据: {line}")
+                else:
+                    return csv_data
 
             time.sleep(0.01)
 
@@ -109,7 +104,7 @@ class ESP32Logger:
         """清除设备上的历史数据"""
         return self.send_command("clear", "OK:CSV_CLEARED")
 
-    def save_to_file(self, data: List[str], filename: str = "esp32_log.csv") -> bool:
+    def save_to_file(self, data: List[str], filename: str = "esp32_log.csv"):
         """将数据保存到文件"""
         try:
             with open(filename, "w", encoding="utf-8") as f:
@@ -123,14 +118,14 @@ class ESP32Logger:
 def print_menu():
     """打印菜单选项"""
     print("\n=== ESP32 数据记录器 ===")
-    print("1. 导出CSV数据")
-    print("2. 清除设备数据")
-    print("3. 导出并保存到文件")
-    print("4. 清除并导出(验证)")
-    print("5. 退出")
+    print("1.  导出CSV数据")
+    print("2.  导出并保存到文件")
+    print("3.  清除并验证是否清除")
+    print("99. 退出")
     return input("请选择操作 (1-5): ").strip()
 
 def main():
+    
     if len(sys.argv) < 2:
         print("使用方法: python esp32_logger.py <串口设备>")
         print("示例: python esp32_logger.py /dev/cu.wchusbserial5A7B1617701")
@@ -155,17 +150,13 @@ def main():
                     if len(data) > 5:
                         print(f"...(共 {len(data)} 行，省略 {len(data)-5} 行)")
 
-            elif choice == "2":  # 清除数据
-                if logger.clear_data():
-                    print("设备数据已清除")
-
-            elif choice == "3":  # 导出并保存
+            elif choice == "2":  # 导出并保存
                 data = logger.export_csv()
                 if data:
                     filename = input("输入保存文件名 (默认: esp32_log.csv): ").strip() or "esp32_log.csv"
                     logger.save_to_file(data, filename)
 
-            elif choice == "4":  # 清除并验证
+            elif choice == "3":  # 清除并验证
                 if logger.clear_data():
                     print("清除成功，正在验证...")
                     data = logger.export_csv()
@@ -174,7 +165,7 @@ def main():
                     else:
                         print("验证失败: 数据未完全清除")
 
-            elif choice == "5":  # 退出
+            elif choice == "99":  # 退出
                 print("再见!")
                 break
 
@@ -182,4 +173,5 @@ def main():
                 print("无效选择，请重新输入")
 
 if __name__ == "__main__":
+    
     main()

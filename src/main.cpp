@@ -22,17 +22,18 @@ void setup() {
   Serial.println("COMMANDS: ping | export | clear | (press button to log)");
 }
 
+unsigned long lastButtonTime = 0;
+const unsigned long debounceTime = 50;
+
 void loop() {
-  // 按钮处理
-  if (digitalRead(BUTTON_PIN) == LOW) {
-    delay(50);
-    if (digitalRead(BUTTON_PIN) == LOW) {
+  
+  // 按钮处理 - 非阻塞式
+  if (digitalRead(BUTTON_PIN) == LOW && millis() - lastButtonTime > debounceTime) {
+      lastButtonTime = millis();
       uint32_t color = getRandomColor();
       pixels.setPixelColor(0, color);
       pixels.show();
       appendDataToCSV(color);
-      while (digitalRead(BUTTON_PIN) == LOW) delay(10);
-    }
   }
 
   // 串口命令处理
@@ -43,6 +44,8 @@ void loop() {
     else if (cmd == "clear") clearCSV();
     else if (cmd == "ping") Serial.println("OK:PONG");
     else Serial.println("ERROR:UNKNOWN_COMMAND");
+    Serial.println("--------------------------");
+    Serial.println("| ping | export | clear | ");
+    Serial.println("--------------------------");
   }
-  delay(100);
 }

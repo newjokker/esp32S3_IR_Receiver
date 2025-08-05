@@ -2,6 +2,6 @@
 
 pio run --target clean
 pio run --target upload
-pio run --target uploadfs
+# pio run --target uploadfs
 
 
