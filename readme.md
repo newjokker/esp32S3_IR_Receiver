@@ -29,7 +29,7 @@ tio -b 115200 --timestamp  /dev/cu.wchusbserial5A7B1617701
 
 ```bash
 
-python3 read_csv.py /dev/cu.wchusbserial5A7B1617701 
+python3 ./tools/read_csv.py /dev/cu.wchusbserial5A7B1617701 
 
 ```
 
