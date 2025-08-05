@@ -1,72 +1,185 @@
 import serial
 import time
+import sys
+from typing import Optional, List
 
-def wait_for_ready(ser, timeout=3):
-    ser.reset_input_buffer()
-    ser.write(b"ping\n")
+class ESP32Logger:
+    
+    def __init__(self, port: str, baudrate: int = 115200):
+        self.port = port
+        self.baudrate = baudrate
+        self.ser = None
 
-    start = time.time()
-    while time.time() - start < timeout:
-        if ser.in_waiting:
-            line = ser.readline().decode('utf-8', errors='ignore').strip()
-            print(f"[ESP32] {line}")
-            if "OK:PONG" in line:
-                return True
-        time.sleep(0.05)
-    return False
+    def __enter__(self):
+        self.connect()
+        return self
 
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.disconnect()
 
-def get_csv_from_esp32(port, baudrate=115200, timeout=10):
-    try:
-        with serial.Serial(port, baudrate, timeout=1) as ser:
-            if not wait_for_ready(ser):
-                print("ESP32 未就绪")
-                return None
+    def connect(self) -> bool:
+        """连接串口设备"""
+        try:
+            self.ser = serial.Serial(self.port, self.baudrate, timeout=1)
+            time.sleep(2)  # 等待连接稳定
+            return True
+        except Exception as e:
+            print(f"[ERROR] 无法连接串口设备: {e}")
+            return False
 
-            # 清空缓冲
-            ser.reset_input_buffer()
-            ser.write(b"export\n")
+    def disconnect(self):
+        """断开串口连接"""
+        if self.ser and self.ser.is_open:
+            self.ser.close()
 
-            print("[INFO] 请求导出CSV...")
-            start_time = time.time()
-            csv_data = []
-            collecting = False
+    def send_command(self, command: str, expected_response: str = None, timeout: float = 3.0) -> bool:
+        """发送命令并检查预期响应"""
+        if not self.ser or not self.ser.is_open:
+            print("[ERROR] 串口未连接")
+            return False
 
-            while time.time() - start_time < timeout:
-                if ser.in_waiting:
-                    line = ser.readline().decode('utf-8', errors='ignore').strip()
-                    if not line:
-                        continue
-                    print(f"[DATA] {line}")
+        self.ser.reset_input_buffer()
+        self.ser.write(f"{command}\n".encode())
 
-                    if line == "CSV_START":
-                        collecting = True
-                        continue
-                    elif line == "CSV_END":
-                        break
-                    elif collecting:
-                        csv_data.append(line)
+        start_time = time.time()
+        while time.time() - start_time < timeout:
+            if self.ser.in_waiting:
+                line = self.ser.readline().decode('utf-8', errors='ignore').strip()
+                if line:
+                    print(f"[ESP32] {line}")
+                    if expected_response and expected_response in line:
+                        return True
+                    # 如果不需要特定响应，只要收到任何响应就返回成功
+                    if not expected_response:
+                        return True
+            time.sleep(0.05)
 
-                time.sleep(0.01)
+        print(f"[ERROR] 命令 '{command}' 超时或未收到预期响应")
+        return False
 
-            if not csv_data:
-                print("[ERROR] 没有收到数据")
-                return None
+    def wait_for_ready(self, timeout: float = 5.0) -> bool:
+        """等待设备就绪"""
+        return self.send_command("ping", "OK:PONG", timeout)
 
-            with open("esp32_log.csv", "w") as f:
-                f.write("\n".join(csv_data))
+    def export_csv(self, timeout: float = 10.0) -> Optional[List[str]]:
+        """导出CSV数据"""
+        if not self.send_command("export", "CSV_START", timeout):
+            return None
 
-            print(f"[OK] 成功保存 {len(csv_data)} 行数据到 esp32_log.csv")
+        csv_data = []
+        start_time = time.time()
+        collecting = False
+        buffer = ""
+
+        while time.time() - start_time < timeout:
+            # 读取所有可用数据
+            while self.ser.in_waiting:
+                buffer += self.ser.read(self.ser.in_waiting).decode('utf-8', errors='ignore')
+            
+            # 处理缓冲区中的完整行
+            while "\n" in buffer:
+                line, buffer = buffer.split("\n", 1)
+                line = line.strip()
+                if not line:
+                    continue
+
+                print(f"[DEBUG] 原始行: {line}")  # 调试输出
+
+                if line == "CSV_START":
+                    collecting = True
+                    print("[DEBUG] 开始收集数据")
+                elif line == "CSV_END":
+                    print("[DEBUG] 结束收集数据")
+                    return csv_data
+                elif collecting:
+                    csv_data.append(line)
+                    print(f"[DEBUG] 收集到数据: {line}")
+
+            time.sleep(0.01)
+
+        # 检查是否收集到数据但未收到CSV_END
+        if csv_data:
+            print("[WARNING] 超时前收到数据但未收到结束标记")
             return csv_data
-
-    except Exception as e:
-        print(f"[ERROR] {e}")
+        
+        print("[DEBUG] 缓冲区最后内容:", buffer)  # 调试输出
         return None
+    
+    def clear_data(self) -> bool:
+        """清除设备上的历史数据"""
+        return self.send_command("clear", "OK:CSV_CLEARED")
+
+    def save_to_file(self, data: List[str], filename: str = "esp32_log.csv") -> bool:
+        """将数据保存到文件"""
+        try:
+            with open(filename, "w", encoding="utf-8") as f:
+                f.write("\n".join(data))
+            print(f"[SUCCESS] 数据已保存到 {filename} (共 {len(data)} 行)")
+            return True
+        except Exception as e:
+            print(f"[ERROR] 保存文件失败: {e}")
+            return False
+
+def print_menu():
+    """打印菜单选项"""
+    print("\n=== ESP32 数据记录器 ===")
+    print("1. 导出CSV数据")
+    print("2. 清除设备数据")
+    print("3. 导出并保存到文件")
+    print("4. 清除并导出(验证)")
+    print("5. 退出")
+    return input("请选择操作 (1-5): ").strip()
+
+def main():
+    if len(sys.argv) < 2:
+        print("使用方法: python esp32_logger.py <串口设备>")
+        print("示例: python esp32_logger.py /dev/cu.wchusbserial5A7B1617701")
+        return
+
+    port = sys.argv[1]
+    
+    with ESP32Logger(port) as logger:
+        if not logger.wait_for_ready():
+            print("无法与ESP32建立通信，请检查连接")
+            return
+
+        while True:
+            choice = print_menu()
+
+            if choice == "1":  # 导出CSV
+                data = logger.export_csv()
+                if data:
+                    print("\n=== CSV数据预览 (前5行) ===")
+                    for line in data[:5]:
+                        print(line)
+                    if len(data) > 5:
+                        print(f"...(共 {len(data)} 行，省略 {len(data)-5} 行)")
+
+            elif choice == "2":  # 清除数据
+                if logger.clear_data():
+                    print("设备数据已清除")
+
+            elif choice == "3":  # 导出并保存
+                data = logger.export_csv()
+                if data:
+                    filename = input("输入保存文件名 (默认: esp32_log.csv): ").strip() or "esp32_log.csv"
+                    logger.save_to_file(data, filename)
+
+            elif choice == "4":  # 清除并验证
+                if logger.clear_data():
+                    print("清除成功，正在验证...")
+                    data = logger.export_csv()
+                    if data and len(data) <= 1:  # 只有标题行
+                        print("验证成功: 数据已清除")
+                    else:
+                        print("验证失败: 数据未完全清除")
+
+            elif choice == "5":  # 退出
+                print("再见!")
+                break
+
+            else:
+                print("无效选择，请重新输入")
 
 if __name__ == "__main__":
-    port = "/dev/cu.wchusbserial5A7B1617701" 
-    data = get_csv_from_esp32(port)
-    if data:
-        print("\n=== CSV 内容预览 ===")
-        for line in data:
-            print(line)
+    main()
