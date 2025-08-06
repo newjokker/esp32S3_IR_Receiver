@@ -8,6 +8,14 @@ IRrecv irrecv(IR_RECEIVE_PIN);
 
 WebServer server(80);
 
+// Pixel 亮一下
+void set_pixel_color(uint32_t color){
+    pixels.setPixelColor(0, color);
+    pixels.show();
+    delay(100);
+    pixels.clear();
+    pixels.show();
+}
 
 // ==== 文件系统初始化 ====
 bool initFileSystem() {
@@ -154,8 +162,9 @@ void handleColor() {
       
       // 设置LED颜色
       uint32_t color = pixels.Color(r, g, b);
-      pixels.setPixelColor(0, color);
-      pixels.show();
+      // pixels.setPixelColor(0, color);
+      // pixels.show();
+      set_pixel_color(color);
       
       // 记录到CSV
       appendDataToCSV(color, "web");
@@ -218,8 +227,12 @@ void handleIRSignal(IRrecv &irrecv, Adafruit_NeoPixel &pixels) {
     if (results.value != 0xFFFFFFFFFFFFFFFF) {  
       printIRDetails(results);
       uint32_t color = getColorForSignal(results.value);
-      pixels.setPixelColor(0, color);
-      pixels.show();
+      
+      // pixels.setPixelColor(0, color);
+      // pixels.show();
+
+      set_pixel_color(color);
+
       appendDataToCSV(color, "ir_reciver");
     } else {
       Serial.println("忽略重复信号");

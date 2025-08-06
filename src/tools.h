@@ -29,6 +29,8 @@ void initIRReceiver(IRrecv &irrecv);
 void handleIRSignal(IRrecv &irrecv, Adafruit_NeoPixel &pixels);
 uint32_t getColorForSignal(uint64_t signalValue);
 
+void set_pixel_color(uint32_t color);
+
 void initServer();
 void handleRoot();
 void handleColor();
