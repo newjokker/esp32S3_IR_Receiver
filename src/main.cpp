@@ -41,8 +41,6 @@ void loop() {
   if (digitalRead(BUTTON_PIN) == LOW && millis() - lastButtonTime > debounceTime) {
       lastButtonTime = millis();
       uint32_t color = getRandomColor();
-      // pixels.setPixelColor(0, color);
-      // pixels.show();
       set_pixel_color(color);
       appendDataToCSV(color, "button");
   }

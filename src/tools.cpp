@@ -135,14 +135,56 @@ void initServer(){
 
 // 处理根路径
 void handleRoot() {
-  String html = "<html><head><title>ESP32 LED Control</title></head><body>";
-  html += "<h1>ESP32 LED Color Control</h1>";
-  html += "<form action='/setcolor' method='GET'>";
-  html += "Color (RRR,GGG,BBB): <input type='text' name='rgb' value='255,255,255'><br>";
-  html += "<input type='submit' value='Set Color'>";
-  html += "</form>";
-  html += "<p>Current IP: " + WiFi.localIP().toString() + "</p>";
-  html += "</body></html>";
+  String html = R"====(
+<html>
+<head>
+  <title>ESP32 LED Control</title>
+  <style>
+    body { font-family: Arial, sans-serif; text-align: center; margin-top: 50px; }
+    button {
+      padding: 15px 30px;
+      font-size: 18px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    button:hover { background-color: #45a049; }
+    .color-box {
+      width: 200px;
+      height: 200px;
+      margin: 20px auto;
+      border: 2px solid #333;
+    }
+  </style>
+</head>
+<body>
+  <h1>ESP32 LED Color Generator</h1>
+  <div class="color-box" id="colorBox"></div>
+  <button onclick="generateColor()">Generate Random Color</button>
+  
+  <script>
+    function generateColor() {
+      // 生成随机RGB值
+      const r = Math.floor(Math.random() * 256);
+      const g = Math.floor(Math.random() * 256);
+      const b = Math.floor(Math.random() * 256);
+      
+      // 显示颜色
+      document.getElementById('colorBox').style.backgroundColor = 
+        `rgb(${r},${g},${b})`;
+      
+      // 发送到服务器
+      fetch(`/setcolor?rgb=${r},${g},${b}`)
+        .then(response => response.text())
+        .then(data => console.log(data))
+        .catch(error => console.error('Error:', error));
+    }
+  </script>
+</body>
+</html>
+  )====";
   
   server.send(200, "text/html", html);
 }
