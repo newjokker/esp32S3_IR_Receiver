@@ -6,6 +6,9 @@ Adafruit_NeoPixel pixels(NUM_LEDS, LED_PIN, NEO_GRB + NEO_KHZ800);
 
 IRrecv irrecv(IR_RECEIVE_PIN);
 
+WebServer server(80);
+
+
 // ==== 文件系统初始化 ====
 bool initFileSystem() {
   if (!LittleFS.begin(true)) {
@@ -105,6 +108,70 @@ void initWiFiAndTime() {
   } else {
     Serial.println("\nERROR:WIFI_CONNECT_FAIL");
   }
+}
+
+// 服务初始化
+void initServer(){
+  server.on("/", handleRoot);          // 主页
+  server.on("/setcolor", handleColor); // 设置颜色
+  server.onNotFound(handleNotFound);   // 404处理
+  
+  server.begin();  // 启动Web服务器
+  Serial.println("HTTP server started");
+  
+  // 打印IP地址
+  Serial.print("Use this URL to connect: http://");
+  Serial.print(WiFi.localIP());
+  Serial.println("/");
+}
+
+// 处理根路径
+void handleRoot() {
+  String html = "<html><head><title>ESP32 LED Control</title></head><body>";
+  html += "<h1>ESP32 LED Color Control</h1>";
+  html += "<form action='/setcolor' method='GET'>";
+  html += "Color (RRR,GGG,BBB): <input type='text' name='rgb' value='255,255,255'><br>";
+  html += "<input type='submit' value='Set Color'>";
+  html += "</form>";
+  html += "<p>Current IP: " + WiFi.localIP().toString() + "</p>";
+  html += "</body></html>";
+  
+  server.send(200, "text/html", html);
+}
+
+// 处理颜色设置请求
+void handleColor() {
+  if (server.hasArg("rgb")) {
+    String rgbStr = server.arg("rgb");
+    int r, g, b;
+    
+    // 解析RGB值
+    if (sscanf(rgbStr.c_str(), "%d,%d,%d", &r, &g, &b) == 3) {
+      // 限制数值范围
+      r = constrain(r, 0, 255);
+      g = constrain(g, 0, 255);
+      b = constrain(b, 0, 255);
+      
+      // 设置LED颜色
+      uint32_t color = pixels.Color(r, g, b);
+      pixels.setPixelColor(0, color);
+      pixels.show();
+      
+      // 记录到CSV
+      appendDataToCSV(color, "web");
+      
+      server.send(200, "text/plain", "Color set to R:" + String(r) + " G:" + String(g) + " B:" + String(b));
+    } else {
+      server.send(400, "text/plain", "Invalid color format. Use RRR,GGG,BBB");
+    }
+  } else {
+    server.send(400, "text/plain", "Missing 'rgb' parameter");
+  }
+}
+
+// 处理404错误
+void handleNotFound() {
+  server.send(404, "text/plain", "404: Not found");
 }
 
 // 初始化红外接收

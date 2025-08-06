@@ -1,5 +1,6 @@
 #include "tools.h"
 
+
 // ==== 主程序 ====
 void setup() {
   Serial.begin(115200);
@@ -22,6 +23,9 @@ void setup() {
   // 初始化文件系统
   initFileSystem();
 
+  // 设置Web服务器路由
+  initServer();
+
   Serial.println("COMMANDS: ping | export | clear | (press button to log)");
 }
 
@@ -30,6 +34,9 @@ const unsigned long debounceTime = 50;
 
 void loop() {
   
+  // 处理Web服务器请求
+  server.handleClient();
+
   // 按钮处理 - 非阻塞式
   if (digitalRead(BUTTON_PIN) == LOW && millis() - lastButtonTime > debounceTime) {
       lastButtonTime = millis();
@@ -55,3 +62,5 @@ void loop() {
     Serial.println("--------------------------");
   }
 }
+
+
